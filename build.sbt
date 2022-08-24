@@ -8,13 +8,13 @@ scalaVersion := "2.12.16"
 
 crossScalaVersions := Seq("2.12.16")
 
-libraryDependencies += "org.apache.spark" %% "spark-core" % "3.1.1" % Provided
-
-libraryDependencies += "org.apache.spark" %% "spark-sql" % "3.1.1" % Provided
-
-libraryDependencies += "org.apache.spark" %% "spark-streaming" % "3.1.1" % Provided
-
-libraryDependencies += "com.amazonaws" % "aws-java-sdk-sqs" % "1.12.286"
+libraryDependencies ++= Seq(
+  "org.apache.spark" %% "spark-core" % "3.3.0" % Provided,
+  "org.apache.spark" %% "spark-sql" % "3.3.0" % Provided,
+  "org.apache.spark" %% "spark-streaming" % "3.3.0" % Provided,
+  "com.amazonaws" % "aws-java-sdk-sqs" % "1.12.288",
+  //"org.json4s" %% "json4s-native" % "4.0.5",
+)
 
 pomExtra := {
   <url>https://github.com/imapi/spark-sqs-receiver</url>
@@ -39,7 +39,7 @@ pomExtra := {
 }
 
 assembly / assemblyMergeStrategy := {
-  case PathList("META-INF", xs @ _*) => MergeStrategy.discard
-
+  case PathList("META-INF", "MANIFEST.MF") => MergeStrategy.discard
+  case PathList("META-INF", "services", xs @ _*) => MergeStrategy.first
   case x => MergeStrategy.first
 }
