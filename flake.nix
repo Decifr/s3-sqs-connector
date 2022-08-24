@@ -20,6 +20,7 @@
             jdk11
             just
             maven
+            sbt
             scala
           ];
           shellHook = ''
