@@ -91,6 +91,7 @@ class SqsClient(sourceOptions: SqsSourceOptions,
       val receiveMessageRequest = new ReceiveMessageRequest()
         .withQueueUrl(sqsUrl)
         .withWaitTimeSeconds(sqsLongPollWaitTimeSeconds)
+        .withMaxNumberOfMessages(10)
       val messages = sqsClient.receiveMessage(receiveMessageRequest).getMessages.asScala
       retriesOnFailure = 0
       logDebug(s"successfully received ${messages.size} messages")
