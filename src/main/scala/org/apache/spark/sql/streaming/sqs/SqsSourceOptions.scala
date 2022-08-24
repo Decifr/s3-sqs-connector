@@ -84,6 +84,8 @@ class SqsSourceOptions(parameters: CaseInsensitiveMap[String]) extends Logging {
     throw new IllegalArgumentException("SQS Url is not specified")
   }
 
+  val endpoint: Option[String] = parameters.get("endpoint")
+
   val region: String = parameters.get("region").getOrElse {
     throw new IllegalArgumentException("Region is not specified")
   }

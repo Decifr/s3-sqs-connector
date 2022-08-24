@@ -24,6 +24,7 @@ import java.util.concurrent.TimeUnit
 import scala.collection.JavaConverters._
 
 import com.amazonaws.{AmazonClientException, AmazonServiceException, ClientConfiguration}
+import com.amazonaws.client.builder.{AwsClientBuilder}
 import com.amazonaws.services.sqs.{AmazonSQS, AmazonSQSClientBuilder}
 import com.amazonaws.services.sqs.model.{DeleteMessageBatchRequestEntry, Message, ReceiveMessageRequest}
 import org.apache.hadoop.conf.Configuration
@@ -44,6 +45,7 @@ class SqsClient(sourceOptions: SqsSourceOptions,
   private val maxConnections = sourceOptions.maxConnections
   private val ignoreFileDeletion = sourceOptions.ignoreFileDeletion
   private val region = sourceOptions.region
+  private val endpoint = sourceOptions.endpoint
   val sqsUrl = sourceOptions.sqsUrl
 
   @volatile var exception: Option[Exception] = None
@@ -144,7 +146,7 @@ class SqsClient(sourceOptions: SqsSourceOptions,
         if (eventName.contains("ObjectCreated")) {
           val timestamp = (messageJson \ "Records" \ "eventTime").extract[Array[String]].head
           val timestampMills = convertTimestampToMills(timestamp)
-          val path = "s3://" +
+          val path = "s3a://" +
             bucketName + "/" +
             (messageJson \ "Records" \ "s3" \ "object" \ "key").extract[Array[String]].head
           logDebug("Successfully parsed sqs message")
@@ -201,18 +203,29 @@ class SqsClient(sourceOptions: SqsSourceOptions,
       val isClusterOnEc2Role = hadoopConf.getBoolean(
         "fs.s3.isClusterOnEc2Role", false) || hadoopConf.getBoolean(
         "fs.s3n.isClusterOnEc2Role", false) || sourceOptions.useInstanceProfileCredentials
+      logInfo(s"is cluster on ec ${isClusterOnEc2Role}, ${hadoopConf.getBoolean(
+        "fs.s3.isClusterOnEc2Role", false)}, ${hadoopConf.getBoolean("fs.s3n.isClusterOnEc2Role", false)}, ${sourceOptions.useInstanceProfileCredentials}")
       if (!isClusterOnEc2Role) {
-        val accessKey = hadoopConf.getTrimmed("fs.s3n.awsAccessKeyId")
-        val secretAccessKey = new String(hadoopConf.getPassword("fs.s3n.awsSecretAccessKey")).trim
+        val accessKey = hadoopConf.getTrimmed("fs.s3n.awsAccessKeyId", hadoopConf.getTrimmed("fs.s3a.access.key"))
+        val secretAccessKeyTmp = hadoopConf.getPassword("fs.s3n.awsSecretAccessKey")
+        val secretAccessKey = if (secretAccessKeyTmp != null) new String(secretAccessKeyTmp).trim else hadoopConf.getTrimmed("fs.s3a.secret.key")
+
         logInfo("Using credentials from keys provided")
         val basicAwsCredentialsProvider = new BasicAWSCredentialsProvider(
           accessKey, secretAccessKey)
-        AmazonSQSClientBuilder
+        val builder = AmazonSQSClientBuilder
           .standard()
           .withClientConfiguration(new ClientConfiguration().withMaxConnections(maxConnections))
           .withCredentials(basicAwsCredentialsProvider)
-          .withRegion(region)
-          .build()
+
+        endpoint match {
+          case Some(e) =>
+            builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(e, region))
+          case _ => ;
+            builder.withRegion(region)
+        }
+
+        builder.build()
       } else {
         logInfo("Using the credentials attached to the instance")
         val instanceProfileCredentialsProvider = new InstanceProfileCredentialsProviderWithRetries()
