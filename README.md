@@ -1,4 +1,5 @@
-> WARN: Outdated; in this fork there are some changes which are not yet reflected in the README!
+> **WARN:** README and code have diverged
+> In this fork there are some changes which are not yet reflected in the README!
 
 # S3-SQS Connector
 
