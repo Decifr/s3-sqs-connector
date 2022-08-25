@@ -21,12 +21,12 @@ import scala.util.Random
 
 import org.apache.spark.sql.SparkSession
 
- /**
-  * Example to read files from S3 using SQS Source and write results to Memory Sink
+/** Example to read files from S3 using SQS Source and write results to Memory
+  * Sink
   *
-  * Usage: SqsSourceExample <Sample Record Path to infer schema> <SQS Queue URL> <File Format>
+  * Usage: SqsSourceExample <Sample Record Path to infer schema> <SQS Queue URL>
+  * <File Format>
   */
-
 object SqsSourceExample {
 
   def main(args: Array[String]) {
@@ -45,8 +45,7 @@ object SqsSourceExample {
 
     val fileFormat = args(2)
 
-    val inputDf = spark
-      .readStream
+    val inputDf = spark.readStream
       .format("s3-sqs")
       .schema(schema)
       .option("sqsUrl", queueUrl)
@@ -57,8 +56,7 @@ object SqsSourceExample {
       .option("ignoreFileDeletion", "true")
       .load()
 
-    val query = inputDf
-      .writeStream
+    val query = inputDf.writeStream
       .queryName(queryName)
       .format("memory")
       .option("checkpointLocation", checkpointDir)
@@ -67,7 +65,3 @@ object SqsSourceExample {
     query.awaitTermination()
   }
 }
-
-
-
-

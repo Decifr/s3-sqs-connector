@@ -18,7 +18,11 @@ package org.apache.spark.sql.streaming.sqs
 
 import java.util.Locale
 
-import org.apache.spark.sql.streaming.{StreamingQuery, StreamingQueryException, StreamTest}
+import org.apache.spark.sql.streaming.{
+  StreamingQuery,
+  StreamingQueryException,
+  StreamTest
+}
 import org.apache.spark.sql.types.StructType
 
 class SqsSourceOptionsSuite extends StreamTest {
@@ -26,13 +30,12 @@ class SqsSourceOptionsSuite extends StreamTest {
   test("bad source options") {
     def testBadOptions(option: (String, String))(expectedMsg: String): Unit = {
 
-      var query : StreamingQuery = null
+      var query: StreamingQuery = null
 
       try {
         val errorMessage = intercept[StreamingQueryException] {
           val dummySchema = new StructType
-          val reader = spark
-            .readStream
+          val reader = spark.readStream
             .format("s3-sqs")
             .option("fileFormat", "json")
             .schema(dummySchema)
@@ -48,7 +51,11 @@ class SqsSourceOptionsSuite extends StreamTest {
 
           query.processAllAvailable()
         }.getMessage
-        assert(errorMessage.toLowerCase(Locale.ROOT).contains(expectedMsg.toLowerCase(Locale.ROOT)))
+        assert(
+          errorMessage
+            .toLowerCase(Locale.ROOT)
+            .contains(expectedMsg.toLowerCase(Locale.ROOT))
+        )
       } finally {
         if (query != null) {
           // terminating streaming query if necessary
@@ -58,42 +65,62 @@ class SqsSourceOptionsSuite extends StreamTest {
       }
     }
 
-    testBadOptions("sqsFetchIntervalSeconds" -> "-2")("Invalid value '-2' " +
-      "for option 'sqsFetchIntervalSeconds', must be a positive integer")
-    testBadOptions("sqsLongPollingWaitTimeSeconds" -> "-5")("Invalid value '-5' " +
-      "for option 'sqsLongPollingWaitTimeSeconds',must be an integer between 0 and 20")
-    testBadOptions("sqsMaxConnections" -> "-2")("Invalid value '-2' " +
-      "for option 'sqsMaxConnections', must be a positive integer")
-    testBadOptions("maxFilesPerTrigger" -> "-50")("Invalid value '-50' " +
-      "for option 'maxFilesPerTrigger', must be a positive integer")
-    testBadOptions("ignoreFileDeletion" -> "x")("Invalid value 'x' " +
-      "for option 'ignoreFileDeletion', must be true or false")
-    testBadOptions("fileNameOnly" -> "x")("Invalid value 'x' " +
-      "for option 'fileNameOnly', must be true or false")
-    testBadOptions("shouldSortFiles" -> "x")("Invalid value 'x' " +
-      "for option 'shouldSortFiles', must be true or false")
-    testBadOptions("useInstanceProfileCredentials" -> "x")("Invalid value 'x' " +
-      "for option 'useInstanceProfileCredentials', must be true or false")
+    testBadOptions("sqsFetchIntervalSeconds" -> "-2")(
+      "Invalid value '-2' " +
+        "for option 'sqsFetchIntervalSeconds', must be a positive integer"
+    )
+    testBadOptions("sqsLongPollingWaitTimeSeconds" -> "-5")(
+      "Invalid value '-5' " +
+        "for option 'sqsLongPollingWaitTimeSeconds',must be an integer between 0 and 20"
+    )
+    testBadOptions("sqsMaxConnections" -> "-2")(
+      "Invalid value '-2' " +
+        "for option 'sqsMaxConnections', must be a positive integer"
+    )
+    testBadOptions("maxFilesPerTrigger" -> "-50")(
+      "Invalid value '-50' " +
+        "for option 'maxFilesPerTrigger', must be a positive integer"
+    )
+    testBadOptions("ignoreFileDeletion" -> "x")(
+      "Invalid value 'x' " +
+        "for option 'ignoreFileDeletion', must be true or false"
+    )
+    testBadOptions("fileNameOnly" -> "x")(
+      "Invalid value 'x' " +
+        "for option 'fileNameOnly', must be true or false"
+    )
+    testBadOptions("shouldSortFiles" -> "x")(
+      "Invalid value 'x' " +
+        "for option 'shouldSortFiles', must be true or false"
+    )
+    testBadOptions("useInstanceProfileCredentials" -> "x")(
+      "Invalid value 'x' " +
+        "for option 'useInstanceProfileCredentials', must be true or false"
+    )
 
   }
 
   test("missing mandatory options") {
 
-    def testMissingMandatoryOptions(options: List[(String, String)])(expectedMsg: String): Unit = {
+    def testMissingMandatoryOptions(
+        options: List[(String, String)]
+    )(expectedMsg: String): Unit = {
 
       var query: StreamingQuery = null
 
       try {
         val errorMessage = intercept[StreamingQueryException] {
           val dummySchema = new StructType
-          val reader = spark
-            .readStream
+          val reader = spark.readStream
             .format("s3-sqs")
             .schema(dummySchema)
 
-          val readerWithOptions = options.map { option =>
-           reader.option(option._1, option._2)
-          }.last.load()
+          val readerWithOptions = options
+            .map { option =>
+              reader.option(option._1, option._2)
+            }
+            .last
+            .load()
 
           query = readerWithOptions.writeStream
             .format("memory")
@@ -102,7 +129,11 @@ class SqsSourceOptionsSuite extends StreamTest {
 
           query.processAllAvailable()
         }.getMessage
-        assert(errorMessage.toLowerCase(Locale.ROOT).contains(expectedMsg.toLowerCase(Locale.ROOT)))
+        assert(
+          errorMessage
+            .toLowerCase(Locale.ROOT)
+            .contains(expectedMsg.toLowerCase(Locale.ROOT))
+        )
       } finally {
         if (query != null) {
           // terminating streaming query if necessary
@@ -112,12 +143,14 @@ class SqsSourceOptionsSuite extends StreamTest {
     }
 
     // No fileFormat specified
-    testMissingMandatoryOptions(List("sqsUrl" -> "https://DUMMY_URL", "region" -> "us-east-1"))(
-      "Specifying file format is mandatory with sqs source")
+    testMissingMandatoryOptions(
+      List("sqsUrl" -> "https://DUMMY_URL", "region" -> "us-east-1")
+    )("Specifying file format is mandatory with sqs source")
 
     // Sqs URL not specified
-    testMissingMandatoryOptions(List("fileFormat" -> "json", "region" -> "us-east-1"))(
-      "SQS Url is not specified")
+    testMissingMandatoryOptions(
+      List("fileFormat" -> "json", "region" -> "us-east-1")
+    )("SQS Url is not specified")
   }
 
   test("schema not specified") {
@@ -128,8 +161,7 @@ class SqsSourceOptionsSuite extends StreamTest {
 
     try {
       val errorMessage = intercept[IllegalArgumentException] {
-        val reader = spark
-          .readStream
+        val reader = spark.readStream
           .format("s3-sqs")
           .option("sqsUrl", "https://DUMMY_URL")
           .option("fileFormat", "json")
@@ -143,7 +175,11 @@ class SqsSourceOptionsSuite extends StreamTest {
 
         query.processAllAvailable()
       }.getMessage
-      assert(errorMessage.toLowerCase(Locale.ROOT).contains(expectedMsg.toLowerCase(Locale.ROOT)))
+      assert(
+        errorMessage
+          .toLowerCase(Locale.ROOT)
+          .contains(expectedMsg.toLowerCase(Locale.ROOT))
+      )
     } finally {
       if (query != null) {
         // terminating streaming query if necessary
@@ -154,4 +190,3 @@ class SqsSourceOptionsSuite extends StreamTest {
   }
 
 }
-

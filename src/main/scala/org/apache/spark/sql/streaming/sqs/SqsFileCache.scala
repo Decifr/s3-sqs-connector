@@ -27,18 +27,19 @@ import org.apache.hadoop.fs.Path
 
 import org.apache.spark.internal.Logging
 
-  /**
-   * A custom hash map used to track the list of files seen. This map is thread-safe.
-   * To prevent the hash map from growing indefinitely, a purge function is available to
-   * remove files "maxAgeMs" older than the latest file.
-   */
+/** A custom hash map used to track the list of files seen. This map is
+  * thread-safe. To prevent the hash map from growing indefinitely, a purge
+  * function is available to remove files "maxAgeMs" older than the latest file.
+  */
 
 class SqsFileCache(maxAgeMs: Long, fileNameOnly: Boolean) extends Logging {
   require(maxAgeMs >= 0)
   if (fileNameOnly) {
-    logWarning("'fileNameOnly' is enabled. Make sure your file names are unique (e.g. using " +
-      "UUID), otherwise, files with the same name but under different paths will be considered " +
-      "the same and causes data lost.")
+    logWarning(
+      "'fileNameOnly' is enabled. Make sure your file names are unique (e.g. using " +
+        "UUID), otherwise, files with the same name but under different paths will be considered " +
+        "the same and causes data lost."
+    )
   }
 
   /** Mapping from file path to its message description. */
@@ -54,12 +55,14 @@ class SqsFileCache(maxAgeMs: Long, fileNameOnly: Boolean) extends Logging {
     if (fileNameOnly) new Path(new URI(path)).getName else path
   }
 
-   /**
-    * Returns true if we should consider this file a new file. The file is only considered "new"
-    * if it is new enough that we are still tracking, and we have not seen it before.
+  /** Returns true if we should consider this file a new file. The file is only
+    * considered "new" if it is new enough that we are still tracking, and we
+    * have not seen it before.
     */
   def isNewFile(path: String, timestamp: Long): Boolean = {
-    timestamp >= lastPurgeTimestamp && !sqsMap.containsKey(stripPathIfNecessary(path))
+    timestamp >= lastPurgeTimestamp && !sqsMap.containsKey(
+      stripPathIfNecessary(path)
+    )
   }
 
   /** Add a new file to the map. */
@@ -70,18 +73,20 @@ class SqsFileCache(maxAgeMs: Long, fileNameOnly: Boolean) extends Logging {
     }
   }
 
-   /**
-    * Returns all the new files found - ignore aged files and files that we have already seen.
-    * Sorts the files by timestamp.
+  /** Returns all the new files found - ignore aged files and files that we have
+    * already seen. Sorts the files by timestamp.
     */
-  def getUncommittedFiles(maxFilesPerTrigger: Option[Int],
-                             shouldSortFiles: Boolean): Seq[(String, Long, String)] = {
+  def getUncommittedFiles(
+      maxFilesPerTrigger: Option[Int],
+      shouldSortFiles: Boolean
+  ): Seq[(String, Long, String)] = {
     if (shouldSortFiles) {
       val uncommittedFiles = filterAllUncommittedFiles()
       val sortedFiles = reportTimeTaken("Sorting Files") {
-         uncommittedFiles.sortWith(_._2 < _._2)
+        uncommittedFiles.sortWith(_._2 < _._2)
       }
-      if (maxFilesPerTrigger.nonEmpty) sortedFiles.take(maxFilesPerTrigger.get) else sortedFiles
+      if (maxFilesPerTrigger.nonEmpty) sortedFiles.take(maxFilesPerTrigger.get)
+      else sortedFiles
     } else {
       if (maxFilesPerTrigger.isEmpty) {
         filterAllUncommittedFiles()
@@ -90,38 +95,43 @@ class SqsFileCache(maxAgeMs: Long, fileNameOnly: Boolean) extends Logging {
       }
     }
   }
-    private def filterTopUncommittedFiles(maxFilesPerTrigger: Int): List[(String, Long, String)] = {
-      val iterator = sqsMap.asScala.iterator
-      val uncommittedFiles = ListBuffer[(String, Long, String)]()
-      while (uncommittedFiles.length < maxFilesPerTrigger && iterator.hasNext) {
-        val file = iterator.next()
-        if (file._2.isCommitted && file._2.timestamp >= lastPurgeTimestamp) {
-          uncommittedFiles += ((file._1, file._2.timestamp, file._2.messageReceiptHandle))
-        }
-      }
-      uncommittedFiles.toList
-    }
-
-    private def reportTimeTaken[T](operation: String)(body: => T): T = {
-      val startTime = System.currentTimeMillis()
-      val result = body
-      val endTime = System.currentTimeMillis()
-      val timeTaken = math.max(endTime - startTime, 0)
-
-      logDebug(s"$operation took $timeTaken ms")
-      result
-    }
-
-    private def filterAllUncommittedFiles(): List[(String, Long, String)] = {
-      sqsMap.asScala.foldLeft(List[(String, Long, String)]()) {
-        (list, file) =>
-          if (!file._2.isCommitted && file._2.timestamp >= lastPurgeTimestamp) {
-            list :+ ((file._1, file._2.timestamp, file._2.messageReceiptHandle))
-          } else {
-            list
-          }
+  private def filterTopUncommittedFiles(
+      maxFilesPerTrigger: Int
+  ): List[(String, Long, String)] = {
+    val iterator = sqsMap.asScala.iterator
+    val uncommittedFiles = ListBuffer[(String, Long, String)]()
+    while (uncommittedFiles.length < maxFilesPerTrigger && iterator.hasNext) {
+      val file = iterator.next()
+      if (file._2.isCommitted && file._2.timestamp >= lastPurgeTimestamp) {
+        uncommittedFiles += ((
+          file._1,
+          file._2.timestamp,
+          file._2.messageReceiptHandle
+        ))
       }
     }
+    uncommittedFiles.toList
+  }
+
+  private def reportTimeTaken[T](operation: String)(body: => T): T = {
+    val startTime = System.currentTimeMillis()
+    val result = body
+    val endTime = System.currentTimeMillis()
+    val timeTaken = math.max(endTime - startTime, 0)
+
+    logDebug(s"$operation took $timeTaken ms")
+    result
+  }
+
+  private def filterAllUncommittedFiles(): List[(String, Long, String)] = {
+    sqsMap.asScala.foldLeft(List[(String, Long, String)]()) { (list, file) =>
+      if (!file._2.isCommitted && file._2.timestamp >= lastPurgeTimestamp) {
+        list :+ ((file._1, file._2.timestamp, file._2.messageReceiptHandle))
+      } else {
+        list
+      }
+    }
+  }
 
   /** Removes aged entries and returns the number of files removed. */
   def purge(): Int = {
@@ -138,19 +148,26 @@ class SqsFileCache(maxAgeMs: Long, fileNameOnly: Boolean) extends Logging {
 
   /** Mark file entry as committed or already processed */
   def markCommitted(path: String): Unit = {
-    sqsMap.replace(path, MessageDescription(
-      sqsMap.get(path).timestamp, true, sqsMap.get(path).messageReceiptHandle))
+    sqsMap.replace(
+      path,
+      MessageDescription(
+        sqsMap.get(path).timestamp,
+        true,
+        sqsMap.get(path).messageReceiptHandle
+      )
+    )
   }
 
   def size: Int = sqsMap.size()
 
 }
 
-   /**
-    * A case class to store file metadata. Metadata includes file timestamp, file status -
-    * committed or not committed and message reciept handle used for deleting message from
-    * Amazon SQS
-    */
-case class MessageDescription(timestamp: Long,
-                              isCommitted: Boolean = false,
-                              messageReceiptHandle: String)
+/** A case class to store file metadata. Metadata includes file timestamp, file
+  * status - committed or not committed and message reciept handle used for
+  * deleting message from Amazon SQS
+  */
+case class MessageDescription(
+    timestamp: Long,
+    isCommitted: Boolean = false,
+    messageReceiptHandle: String
+)

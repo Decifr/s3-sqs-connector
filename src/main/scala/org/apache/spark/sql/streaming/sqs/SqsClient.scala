@@ -23,10 +23,18 @@ import java.util.concurrent.TimeUnit
 
 import scala.collection.JavaConverters._
 
-import com.amazonaws.{AmazonClientException, AmazonServiceException, ClientConfiguration}
+import com.amazonaws.{
+  AmazonClientException,
+  AmazonServiceException,
+  ClientConfiguration
+}
 import com.amazonaws.client.builder.{AwsClientBuilder}
 import com.amazonaws.services.sqs.{AmazonSQS, AmazonSQSClientBuilder}
-import com.amazonaws.services.sqs.model.{DeleteMessageBatchRequestEntry, Message, ReceiveMessageRequest}
+import com.amazonaws.services.sqs.model.{
+  DeleteMessageBatchRequestEntry,
+  Message,
+  ReceiveMessageRequest
+}
 import org.apache.hadoop.conf.Configuration
 import org.json4s.{DefaultFormats, MappingException}
 import org.json4s.JsonAST.JValue
@@ -36,10 +44,11 @@ import org.apache.spark.SparkException
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.ThreadUtils
 
-class SqsClient(sourceOptions: SqsSourceOptions,
-                hadoopConf: Configuration) extends Logging {
+class SqsClient(sourceOptions: SqsSourceOptions, hadoopConf: Configuration)
+    extends Logging {
 
-  private val sqsFetchIntervalMilliSeconds = sourceOptions.fetchIntervalMilliSeconds
+  private val sqsFetchIntervalMilliSeconds =
+    sourceOptions.fetchIntervalMilliSeconds
   private val sqsLongPollWaitTimeSeconds = sourceOptions.longPollWaitTimeSeconds
   private val sqsMaxRetries = sourceOptions.maxRetries
   private val maxConnections = sourceOptions.maxConnections
@@ -50,16 +59,21 @@ class SqsClient(sourceOptions: SqsSourceOptions,
 
   @volatile var exception: Option[Exception] = None
 
-  private val timestampFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'") // ISO8601
+  private val timestampFormat = new SimpleDateFormat(
+    "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+  ) // ISO8601
   timestampFormat.setTimeZone(TimeZone.getTimeZone("UTC"))
   private var retriesOnFailure = 0
   private val sqsClient = createSqsClient()
 
-  val sqsScheduler = ThreadUtils.newDaemonSingleThreadScheduledExecutor("sqs-scheduler")
+  val sqsScheduler =
+    ThreadUtils.newDaemonSingleThreadScheduledExecutor("sqs-scheduler")
 
-  val sqsFileCache = new SqsFileCache(sourceOptions.maxFileAgeMs, sourceOptions.fileNameOnly)
+  val sqsFileCache =
+    new SqsFileCache(sourceOptions.maxFileAgeMs, sourceOptions.fileNameOnly)
 
-  val deleteMessageQueue = new java.util.concurrent.ConcurrentLinkedQueue[String]()
+  val deleteMessageQueue =
+    new java.util.concurrent.ConcurrentLinkedQueue[String]()
 
   private val sqsFetchMessagesThread = new Runnable {
     override def run(): Unit = {
@@ -69,9 +83,14 @@ class SqsClient(sourceOptions: SqsSourceOptions,
 
         // Filtering the new messages which are already not seen
         if (newMessages.nonEmpty) {
-          newMessages.filter(message => sqsFileCache.isNewFile(message._1, message._2))
+          newMessages
+            .filter(message => sqsFileCache.isNewFile(message._1, message._2))
             .foreach(message =>
-              sqsFileCache.add(message._1, MessageDescription(message._2, false, message._3)))
+              sqsFileCache.add(
+                message._1,
+                MessageDescription(message._2, false, message._3)
+              )
+            )
         }
       } catch {
         case e: Exception =>
@@ -84,49 +103,56 @@ class SqsClient(sourceOptions: SqsSourceOptions,
     sqsFetchMessagesThread,
     0,
     sqsFetchIntervalMilliSeconds,
-    TimeUnit.MILLISECONDS)
+    TimeUnit.MILLISECONDS
+  )
 
   private def sqsFetchMessages(): Seq[(String, Long, String)] = {
-    val messageList = try {
-      val receiveMessageRequest = new ReceiveMessageRequest()
-        .withQueueUrl(sqsUrl)
-        .withWaitTimeSeconds(sqsLongPollWaitTimeSeconds)
-        .withMaxNumberOfMessages(10)
-      val messages = sqsClient.receiveMessage(receiveMessageRequest).getMessages.asScala
-      retriesOnFailure = 0
-      logDebug(s"successfully received ${messages.size} messages")
-      messages
-    } catch {
-      case ase: AmazonServiceException =>
-        val message =
-        """
+    val messageList =
+      try {
+        val receiveMessageRequest = new ReceiveMessageRequest()
+          .withQueueUrl(sqsUrl)
+          .withWaitTimeSeconds(sqsLongPollWaitTimeSeconds)
+          .withMaxNumberOfMessages(10)
+        val messages =
+          sqsClient.receiveMessage(receiveMessageRequest).getMessages.asScala
+        retriesOnFailure = 0
+        logDebug(s"successfully received ${messages.size} messages")
+        messages
+      } catch {
+        case ase: AmazonServiceException =>
+          val message =
+            """
           |Caught an AmazonServiceException, which means your request made it to Amazon SQS,
           | rejected with an error response for some reason.
         """.stripMargin
-        logWarning(message)
-        logWarning(s"Error Message: ${ase.getMessage}")
-        logWarning(s"HTTP Status Code: ${ase.getStatusCode}, AWS Error Code: ${ase.getErrorCode}")
-        logWarning(s"Error Type: ${ase.getErrorType}, Request ID: ${ase.getRequestId}")
-        evaluateRetries()
-        List.empty
-      case ace: AmazonClientException =>
-        val message =
-        """
+          logWarning(message)
+          logWarning(s"Error Message: ${ase.getMessage}")
+          logWarning(
+            s"HTTP Status Code: ${ase.getStatusCode}, AWS Error Code: ${ase.getErrorCode}"
+          )
+          logWarning(
+            s"Error Type: ${ase.getErrorType}, Request ID: ${ase.getRequestId}"
+          )
+          evaluateRetries()
+          List.empty
+        case ace: AmazonClientException =>
+          val message =
+            """
            |Caught an AmazonClientException, which means, the client encountered a serious
            | internal problem while trying to communicate with Amazon SQS, such as not
            |  being able to access the network.
         """.stripMargin
-        logWarning(message)
-        logWarning(s"Error Message: ${ace.getMessage()}")
-        evaluateRetries()
-        List.empty
-      case e: Exception =>
-        val message = "Received unexpected error from SQS"
-        logWarning(message)
-        logWarning(s"Error Message: ${e.getMessage()}")
-        evaluateRetries()
-        List.empty
-    }
+          logWarning(message)
+          logWarning(s"Error Message: ${ace.getMessage()}")
+          evaluateRetries()
+          List.empty
+        case e: Exception =>
+          val message = "Received unexpected error from SQS"
+          logWarning(message)
+          logWarning(s"Error Message: ${e.getMessage()}")
+          evaluateRetries()
+          List.empty
+      }
     if (messageList.nonEmpty) {
       parseSqsMessages(messageList)
     } else {
@@ -134,47 +160,62 @@ class SqsClient(sourceOptions: SqsSourceOptions,
     }
   }
 
-  private def parseSqsMessages(messageList: Seq[Message]): Seq[(String, Long, String)] = {
+  private def parseSqsMessages(
+      messageList: Seq[Message]
+  ): Seq[(String, Long, String)] = {
     val errorMessages = scala.collection.mutable.ListBuffer[String]()
-    val parsedMessages = messageList.foldLeft(Seq[(String, Long, String)]()) { (list, message) =>
-      implicit val formats = DefaultFormats
-      try {
-        val messageReceiptHandle = message.getReceiptHandle
-        val messageJson = parse(message.getBody).extract[JValue]
-        val bucketName = (
-          messageJson \ "Records" \ "s3" \ "bucket" \ "name").extract[Array[String]].head
-        val eventName = (messageJson \ "Records" \ "eventName").extract[Array[String]].head
-        if (eventName.contains("ObjectCreated")) {
-          val timestamp = (messageJson \ "Records" \ "eventTime").extract[Array[String]].head
-          val timestampMills = convertTimestampToMills(timestamp)
-          val path = "s3a://" +
-            bucketName + "/" +
-            (messageJson \ "Records" \ "s3" \ "object" \ "key").extract[Array[String]].head
-          logDebug("Successfully parsed sqs message")
-          list :+ ((path, timestampMills, messageReceiptHandle))
-        } else {
-          if (eventName.contains("ObjectRemoved")) {
-            if (!ignoreFileDeletion) {
-              exception = Some(new SparkException("ObjectDelete message detected in SQS"))
-            } else {
-              logInfo("Ignoring file deletion message since ignoreFileDeletion is true")
-            }
+    val parsedMessages = messageList.foldLeft(Seq[(String, Long, String)]()) {
+      (list, message) =>
+        implicit val formats = DefaultFormats
+        try {
+          val messageReceiptHandle = message.getReceiptHandle
+          val messageJson = parse(message.getBody).extract[JValue]
+          val bucketName = (messageJson \ "Records" \ "s3" \ "bucket" \ "name")
+            .extract[Array[String]]
+            .head
+          val eventName =
+            (messageJson \ "Records" \ "eventName").extract[Array[String]].head
+          if (eventName.contains("ObjectCreated")) {
+            val timestamp = (messageJson \ "Records" \ "eventTime")
+              .extract[Array[String]]
+              .head
+            val timestampMills = convertTimestampToMills(timestamp)
+            val path = "s3a://" +
+              bucketName + "/" +
+              (messageJson \ "Records" \ "s3" \ "object" \ "key")
+                .extract[Array[String]]
+                .head
+            logDebug("Successfully parsed sqs message")
+            list :+ ((path, timestampMills, messageReceiptHandle))
           } else {
-            logWarning("Ignoring unexpected message detected in SQS")
+            if (eventName.contains("ObjectRemoved")) {
+              if (!ignoreFileDeletion) {
+                exception = Some(
+                  new SparkException("ObjectDelete message detected in SQS")
+                )
+              } else {
+                logInfo(
+                  "Ignoring file deletion message since ignoreFileDeletion is true"
+                )
+              }
+            } else {
+              logWarning("Ignoring unexpected message detected in SQS")
+            }
+            errorMessages.append(messageReceiptHandle)
+            list
           }
-          errorMessages.append(messageReceiptHandle)
-          list
+        } catch {
+          case me: MappingException =>
+            errorMessages.append(message.getReceiptHandle)
+            logWarning(s"Error in parsing SQS message ${me.getMessage}")
+            list
+          case e: Exception =>
+            errorMessages.append(message.getReceiptHandle)
+            logWarning(
+              s"Unexpected error while parsing SQS message ${e.getMessage}"
+            )
+            list
         }
-      } catch {
-        case me: MappingException =>
-          errorMessages.append(message.getReceiptHandle)
-          logWarning(s"Error in parsing SQS message ${me.getMessage}")
-          list
-        case e: Exception =>
-          errorMessages.append(message.getReceiptHandle)
-          logWarning(s"Unexpected error while parsing SQS message ${e.getMessage}")
-          list
-      }
     }
     if (errorMessages.nonEmpty) {
       addToDeleteMessageQueue(errorMessages.toList)
@@ -191,54 +232,84 @@ class SqsClient(sourceOptions: SqsSourceOptions,
     retriesOnFailure += 1
     if (retriesOnFailure >= sqsMaxRetries) {
       logError("Max retries reached")
-      exception = Some(new SparkException("Unable to receive Messages from SQS for " +
-        s"${sqsMaxRetries} times Giving up. Check logs for details."))
+      exception = Some(
+        new SparkException(
+          "Unable to receive Messages from SQS for " +
+            s"${sqsMaxRetries} times Giving up. Check logs for details."
+        )
+      )
     } else {
-      logWarning(s"Attempt ${retriesOnFailure}." +
-        s"Will reattempt after ${sqsFetchIntervalMilliSeconds} seconds")
+      logWarning(
+        s"Attempt ${retriesOnFailure}." +
+          s"Will reattempt after ${sqsFetchIntervalMilliSeconds} seconds"
+      )
     }
   }
 
   private def createSqsClient(): AmazonSQS = {
     try {
       val isClusterOnEc2Role = hadoopConf.getBoolean(
-        "fs.s3.isClusterOnEc2Role", false) || hadoopConf.getBoolean(
-        "fs.s3n.isClusterOnEc2Role", false) || sourceOptions.useInstanceProfileCredentials
-      logInfo(s"is cluster on ec ${isClusterOnEc2Role}, ${hadoopConf.getBoolean(
-        "fs.s3.isClusterOnEc2Role", false)}, ${hadoopConf.getBoolean("fs.s3n.isClusterOnEc2Role", false)}, ${sourceOptions.useInstanceProfileCredentials}")
+        "fs.s3.isClusterOnEc2Role",
+        false
+      ) || hadoopConf.getBoolean(
+        "fs.s3n.isClusterOnEc2Role",
+        false
+      ) || sourceOptions.useInstanceProfileCredentials
+      logInfo(
+        s"is cluster on ec ${isClusterOnEc2Role}, ${hadoopConf
+            .getBoolean("fs.s3.isClusterOnEc2Role", false)}, ${hadoopConf
+            .getBoolean("fs.s3n.isClusterOnEc2Role", false)}, ${sourceOptions.useInstanceProfileCredentials}"
+      )
       if (!isClusterOnEc2Role) {
-        val accessKey = hadoopConf.getTrimmed("fs.s3n.awsAccessKeyId", hadoopConf.getTrimmed("fs.s3a.access.key"))
-        val secretAccessKeyTmp = hadoopConf.getPassword("fs.s3n.awsSecretAccessKey")
-        val secretAccessKey = if (secretAccessKeyTmp != null) new String(secretAccessKeyTmp).trim else hadoopConf.getTrimmed("fs.s3a.secret.key")
+        val accessKey = hadoopConf.getTrimmed(
+          "fs.s3n.awsAccessKeyId",
+          hadoopConf.getTrimmed("fs.s3a.access.key")
+        )
+        val secretAccessKeyTmp =
+          hadoopConf.getPassword("fs.s3n.awsSecretAccessKey")
+        val secretAccessKey =
+          if (secretAccessKeyTmp != null) new String(secretAccessKeyTmp).trim
+          else hadoopConf.getTrimmed("fs.s3a.secret.key")
 
         logInfo("Using credentials from keys provided")
-        val basicAwsCredentialsProvider = new BasicAWSCredentialsProvider(
-          accessKey, secretAccessKey)
+        val basicAwsCredentialsProvider =
+          new BasicAWSCredentialsProvider(accessKey, secretAccessKey)
         val builder = AmazonSQSClientBuilder
           .standard()
-          .withClientConfiguration(new ClientConfiguration().withMaxConnections(maxConnections))
+          .withClientConfiguration(
+            new ClientConfiguration().withMaxConnections(maxConnections)
+          )
           .withCredentials(basicAwsCredentialsProvider)
 
         endpoint match {
           case Some(e) =>
-            builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(e, region))
-          case _ => ;
+            builder.withEndpointConfiguration(
+              new AwsClientBuilder.EndpointConfiguration(e, region)
+            )
+          case _ =>
+              ;
             builder.withRegion(region)
         }
 
         builder.build()
       } else {
         logInfo("Using the credentials attached to the instance")
-        val instanceProfileCredentialsProvider = new InstanceProfileCredentialsProviderWithRetries()
+        val instanceProfileCredentialsProvider =
+          new InstanceProfileCredentialsProviderWithRetries()
         AmazonSQSClientBuilder
           .standard()
-          .withClientConfiguration(new ClientConfiguration().withMaxConnections(maxConnections))
+          .withClientConfiguration(
+            new ClientConfiguration().withMaxConnections(maxConnections)
+          )
           .withCredentials(instanceProfileCredentialsProvider)
           .build()
       }
     } catch {
       case e: Exception =>
-        throw new SparkException(s"Error occured while creating Amazon SQS Client", e)
+        throw new SparkException(
+          s"Error occured while creating Amazon SQS Client",
+          e
+        )
     }
   }
 
@@ -252,16 +323,23 @@ class SqsClient(sourceOptions: SqsSourceOptions,
       val messageReceiptHandles = deleteMessageQueue.asScala.toList
       val messageGroups = messageReceiptHandles.sliding(10, 10).toList
       messageGroups.foreach { messageGroup =>
-        val requestEntries = messageGroup.foldLeft(List[DeleteMessageBatchRequestEntry]()) {
-          (list, messageReceiptHandle) =>
-            count = count + 1
-            list :+ new DeleteMessageBatchRequestEntry(count.toString, messageReceiptHandle)
-        }.asJava
+        val requestEntries = messageGroup
+          .foldLeft(List[DeleteMessageBatchRequestEntry]()) {
+            (list, messageReceiptHandle) =>
+              count = count + 1
+              list :+ new DeleteMessageBatchRequestEntry(
+                count.toString,
+                messageReceiptHandle
+              )
+          }
+          .asJava
         val batchResult = sqsClient.deleteMessageBatch(sqsUrl, requestEntries)
         if (!batchResult.getFailed.isEmpty) {
           batchResult.getFailed.asScala.foreach { entry =>
             sqsClient.deleteMessage(
-              sqsUrl, requestEntries.get(entry.getId.toInt).getReceiptHandle)
+              sqsUrl,
+              requestEntries.get(entry.getId.toInt).getReceiptHandle
+            )
           }
         }
       }

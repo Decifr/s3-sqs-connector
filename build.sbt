@@ -12,8 +12,8 @@ libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-core" % "3.3.0" % Provided,
   "org.apache.spark" %% "spark-sql" % "3.3.0" % Provided,
   "org.apache.spark" %% "spark-streaming" % "3.3.0" % Provided,
-  "com.amazonaws" % "aws-java-sdk-sqs" % "1.12.288" % Provided,
-  //"org.json4s" %% "json4s-native" % "4.0.5",
+  "com.amazonaws" % "aws-java-sdk-sqs" % "1.12.288" % Provided
+  // "org.json4s" %% "json4s-native" % "4.0.5",
 )
 
 pomExtra := {
@@ -39,8 +39,8 @@ pomExtra := {
 }
 
 assembly / assemblyMergeStrategy := {
-  case PathList("META-INF", "MANIFEST.MF") => MergeStrategy.discard
+  case PathList("META-INF", "MANIFEST.MF")       => MergeStrategy.discard
   case PathList("META-INF", "services", xs @ _*) => MergeStrategy.first
-  case PathList("com", "aws", xs @ _*) => MergeStrategy.discard
-  case x => MergeStrategy.first
+  case PathList("com", "aws", xs @ _*)           => MergeStrategy.discard
+  case x                                         => MergeStrategy.first
 }

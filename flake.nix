@@ -19,9 +19,14 @@
             awscli2
             jdk11
             just
-            maven
             sbt
             scala
+
+            # Formatteres
+            nodePackages.prettier
+            shfmt
+            scalafmt
+            treefmt
           ];
           shellHook = ''
           '';

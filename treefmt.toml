@@ -1,0 +1,24 @@
+[formatter.nix]
+command = "nixpkgs-fmt"
+includes = ["*.nix"]
+
+[formatter.scala]
+command = "scalafmt"
+options = ["--config-str", "version=\"3.5.9\",runner.dialect=\"scala212\""]
+includes = ["*.scala", "*.sbt"]
+
+[formatter.prettier]
+command = "prettier"
+options = ["--write"]
+includes = [
+    "*.css",
+    "*.html",
+    "*.js",
+    "*.json",
+    "*.jsx",
+    "*.md",
+    "*.mdx",
+    "*.scss",
+    "*.ts",
+]
+excludes = ["CHANGELOG.md"]
