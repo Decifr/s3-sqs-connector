@@ -1,0 +1,3 @@
+export:
+    sbt clean assembly
+
