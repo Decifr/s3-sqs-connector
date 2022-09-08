@@ -18,15 +18,14 @@
 package org.apache.spark.sql.streaming.sqs
 
 import java.net.URI
-
 import org.apache.hadoop.fs.Path
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
 import org.apache.spark.sql.execution.streaming._
 import org.apache.spark.sql.execution.streaming.FileStreamSource._
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.functions.{current_timestamp, input_file_name}
 
 class SqsSource(
     sparkSession: SparkSession,
@@ -87,7 +86,7 @@ class SqsSource(
       DataSource(
         sparkSession,
         paths = files.map(f => new Path(new URI(f.path)).toString),
-        userSpecifiedSchema = Some(schema),
+        userSpecifiedSchema = None,
         className = fileFormatClassName,
         options = options
       )
@@ -97,7 +96,8 @@ class SqsSource(
         newDataSource.resolveRelation(checkFilesExist = false),
         isStreaming = true
       )
-    )
+    ).withColumn("filename", input_file_name())
+      .withColumn("processed_raw_at", current_timestamp())
   }
 
   private def fetchMaxOffset(): FileStreamSourceOffset = synchronized {
@@ -130,7 +130,7 @@ class SqsSource(
       val messageReceiptHandles = batchFiles.map {
         case (path, timestamp, receiptHandle) =>
           sqsClient.sqsFileCache.markCommitted(path)
-          logDebug(s"New file: $path")
+          logDebug(s"New file: $path with handle $receiptHandle")
           receiptHandle
       }.toList
       sqsClient.addToDeleteMessageQueue(messageReceiptHandles)

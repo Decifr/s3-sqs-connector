@@ -4,6 +4,8 @@ organization := "me.decifr"
 
 version := "2.1.0"
 
+javacOptions ++= Seq("-source", "1.8", "-target", "1.8", "-Xlint")
+
 scalaVersion := "2.12.16"
 
 crossScalaVersions := Seq("2.12.16")
